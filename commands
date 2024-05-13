@@ -1,2 +1,16 @@
 if grep -qE "^\s*[^#].*\s+/var/tmp\s+.*nodev.*nosuid.*noexec" /etc/fstab; then
         echo "/var/tmp already configured with nodev, nosuid, and noexec options in /etc/fstab"
+
+
+
+
+
+if grep -qE "^\s*[^#].*\s+/var/tmp\s+" /etc/fstab; then
+   # Check if nodev option is set for /var/tmp
+   if grep -qE "^\s*[^#].*\s+/var/tmp\s+.*nodev." /etc/fstab; then
+        echo "/var/tmp already configured with nodev options in /etc/fstab"
+   else
+      # Add nodevoptions to /var/tmp entry in /etc/fstab
+      sed -i '/\/var\/tmp/ s/defaults/&'",$1"'/g' /etc/fstab
+      echo "nodev options added to /var/tmp entry in /etc/fstab"
+    fi
