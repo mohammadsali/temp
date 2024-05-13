@@ -1,0 +1,2 @@
+if grep -qE "^\s*[^#].*\s+/var/tmp\s+.*nodev.*nosuid.*noexec" /etc/fstab; then
+        echo "/var/tmp already configured with nodev, nosuid, and noexec options in /etc/fstab"
