@@ -1,0 +1,75 @@
+#!/bin/bash
+
+# Basic Linux Hardening Script with Logging
+
+# Log file
+LOG_FILE="/var/log/hardening.log"
+
+# Function to log messages
+log_message() {
+    local message="$1"
+    echo "$(date +"%Y-%m-%d %T") - $message" >> "$LOG_FILE"
+}
+
+# Function to log step status
+log_step_status() {
+    local step="$1"
+    local exit_code="$2"
+    if [ "$exit_code" -eq 0 ]; then
+        log_message "Step '$step' completed successfully."
+    else
+        log_message "Step '$step' failed with exit code $exit_code."
+    fi
+}
+
+# Update package repositories and installed packages
+log_message "Updating package repositories and installed packages..."
+sudo apt update && sudo apt upgrade -y
+log_step_status "Update" $?
+
+# Enable firewall (UFW) and allow necessary ports
+log_message "Configuring firewall (UFW)..."
+sudo apt install ufw -y
+sudo ufw allow OpenSSH  # Allow SSH access
+sudo ufw enable
+log_step_status "Firewall" $?
+
+# Disable root login via SSH
+log_message "Disabling root login via SSH..."
+sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
+sudo service ssh restart
+log_step_status "Root Login" $?
+
+# Disable password authentication and use SSH keys only
+log_message "Disabling password authentication and requiring SSH keys only..."
+sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+sudo service ssh restart
+log_step_status "Password Auth" $?
+
+# Set up automatic security updates
+log_message "Setting up automatic security updates..."
+sudo apt install unattended-upgrades -y
+sudo dpkg-reconfigure --priority=low unattended-upgrades
+log_step_status "Auto Updates" $?
+
+# Install and configure fail2ban for intrusion prevention
+log_message "Installing fail2ban for intrusion prevention..."
+sudo apt install fail2ban -y
+sudo cp /etc/fail2ban/jail.{conf,local}
+sudo systemctl restart fail2ban
+log_step_status "Fail2Ban" $?
+
+# Limit user access
+log_message "Limiting user access..."
+# Example: Create a new user and disable root login
+# sudo adduser newuser
+# sudo usermod -aG sudo newuser
+# sudo passwd -l root
+log_step_status "User Access" $?
+
+# Configure syslog to forward logs to a centralized server (optional)
+# log_message "Configuring syslog to forward logs to a centralized server..."
+# Edit /etc/rsyslog.conf to include appropriate configuration for forwarding logs
+# log_step_status "Syslog" $?
+
+echo "Basic system hardening complete. See $LOG_FILE for details."
