@@ -22,6 +22,26 @@ log_step_status() {
     fi
 }
 
+# ensure nodev,nosuid,noexec option on /var/tmp/
+log_message "ensure nodev,nosuid,noexec option on /var/tmp/"
+if grep -qE "^\s*[^#].*\s+/var/tmp\s+" /etc/fstab; then
+   # Check if nodev option is set for /var/tmp
+   if grep -qE "^\s*[^#].*\s+/var/tmp\s+.*nodev" /etc/fstab; then
+            log_message "/var/tmp is correctly configured with nodev option in /etc/fstab"
+            echo "/var/tmp is correctly configured with nodev option in /etc/fstab"
+        else
+            log_message "/var/tmp is not configured with nodev option in /etc/fstab"
+            echo "/var/tmp is not configured with nodev option in /etc/fstab"
+            # Optionally, you can uncomment the following line to automatically add the nodev option
+            # echo "Adding nodev option for /var/tmp in /etc/fstab..."
+            # echo "UUID=$(lsblk -no UUID /dev/sdaX)   /var/tmp   ext4   defaults,nodev   0   0" >> /etc/fstab
+        fi
+    else
+        log_message "/var/tmp entry not found in /etc/fstab"
+        echo "/var/tmp entry not found in /etc/fstab"
+    fi
+log_step_status "Update" $?
+
 # Update package repositories and installed packages
 log_message "Updating package repositories and installed packages..."
 sudo apt update && sudo apt upgrade -y
