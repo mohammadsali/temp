@@ -23,15 +23,27 @@ log_step_status() {
 }
 
 # Ensure nodev, nosuid, noexec options on /var/tmp
-log_message "Ensure nodev, nosuid, noexec options on /var/tmp"
+log_message "****Ensure nodev, nosuid, noexec options on /var/tmp  ****"
 if [ -e "/etc/fstab" ]; then
     if grep -qE "^\s*[^#].*\s+/var/tmp\s+" /etc/fstab; then
-        # Add nodev, nosuid, noexec options if not already set
-        if ! grep -qE "^\s*[^#].*\s+/var/tmp\s+.*nodev.*nosuid.*noexec" /etc/fstab; then
-            sed -i '/\/var\/tmp/ s/defaults/&',nodev,nosuid,noexec'/g' /etc/fstab
-            log_step_status "Adding nodev, nosuid, noexec options to /var/tmp in /etc/fstab" $?
+        # Add nodev option if not already set
+        if ! grep -qE "^\s*[^#].*\s+/var/tmp\s+.*nodev" /etc/fstab; then
+            sed -i '/\/var\/tmp/ s/defaults/&',nodev'/g' /etc/fstab
+            log_step_status "Adding nodev option to /var/tmp in /etc/fstab" $?
         else
-            log_message "/var/tmp already configured with nodev, nosuid, noexec options in /etc/fstab"
+            log_message "/var/tmp already configured with nodev option in /etc/fstab"
+        fi
+        if ! grep -qE "^\s*[^#].*\s+/var/tmp\s+.*nosuid" /etc/fstab; then
+            sed -i '/\/var\/tmp/ s/defaults/&',nosuid'/g' /etc/fstab
+            log_step_status "Adding nosuid option to /var/tmp in /etc/fstab" $?
+        else
+            log_message "/var/tmp already configured with nosuid option in /etc/fstab"
+        fi
+        if ! grep -qE "^\s*[^#].*\s+/var/tmp\s+.*noexec" /etc/fstab; then
+            sed -i '/\/var\/tmp/ s/defaults/&',noexec'/g' /etc/fstab
+            log_step_status "Adding noexec option to /var/tmp in /etc/fstab" $?
+        else
+            log_message "/var/tmp already configured with noexec option in /etc/fstab"
         fi
     else
         log_message "/var/tmp entry not found in /etc/fstab"
@@ -39,8 +51,27 @@ if [ -e "/etc/fstab" ]; then
 else
     log_message "/etc/fstab not found"
 fi
+echo "Fstab for /var/tmp check complete. See $LOG_FILE for details."
 
-echo "Fstab check complete. See $LOG_FILE for details."
+# Ensure nodev option on /home
+log_message "****Ensure nodev option on /home  ****"
+if [ -e "/etc/fstab" ]; then
+    if grep -qE "^\s*[^#].*\s+/home\s+" /etc/fstab; then
+        # Add nodev option if not already set
+        if ! grep -qE "^\s*[^#].*\s+/home\s+.*nodev" /etc/fstab; then
+            sed -i '/\/home/ s/defaults/&',nodev'/g' /etc/fstab
+            log_step_status "Adding nodev option to /home in /etc/fstab" $?
+        else
+            log_message "/home already configured with nodev option in /etc/fstab"
+        fi
+    else
+        log_message "/home entry not found in /etc/fstab"
+    fi
+else
+    log_message "/home not found"
+fi
+echo "Fstab for /home check complete. See $LOG_FILE for details."
+
 
 # Update package repositories and installed packages
 log_message "Updating package repositories and installed packages..."
