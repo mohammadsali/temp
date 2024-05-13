@@ -14,3 +14,61 @@ if grep -qE "^\s*[^#].*\s+/var/tmp\s+" /etc/fstab; then
       sed -i '/\/var\/tmp/ s/defaults/&'",$1"'/g' /etc/fstab
       echo "nodev options added to /var/tmp entry in /etc/fstab"
     fi
+
+
+
+#!/bin/bash
+
+# Basic Linux Hardening Script with Logging
+
+# Log file
+LOG_FILE="/var/log/hardening.log"
+
+# Function to log messages
+log_message() {
+    local message="$1"
+    echo "$(date +"%Y-%m-%d %T") - $message" >> "$LOG_FILE"
+}
+
+# Function to log step status
+log_step_status() {
+    local step="$1"
+    local exit_code="$2"
+    if [ "$exit_code" -eq 0 ]; then
+        log_message "Step '$step' completed successfully."
+    else
+        log_message "Step '$step' failed with exit code $exit_code."
+    fi
+}
+
+# ensure nodev,nosuid,noexec option on /var/tmp/
+log_message "ensure nodev,nosuid,noexec option on /var/tmp/"
+if grep -qE "^\s*[^#].*\s+/var/tmp\s+" /etc/fstab; then
+   # Check if nodev option is set for /var/tmp
+   if grep -qE "^\s*[^#].*\s+/var/tmp\s+.*nodev." /etc/fstab; then
+        echo "/var/tmp already configured with nodev options in /etc/fstab"
+   else
+      # Add nodevoptions to /var/tmp entry in /etc/fstab
+      sed -i '/\/var\/tmp/ s/defaults/&'",nodev"'/g' /etc/fstab
+      echo "nodev options added to /var/tmp entry in /etc/fstab"
+      log_message "nodev options added to /var/tmp entry in /etc/fstab"
+    if grep -qE "^\s*[^#].*\s+/var/tmp\s+.*nosuid." /etc/fstab; then
+        echo "/var/tmp already configured with nosuid options in /etc/fstab"
+   else
+      # Add nodevoptions to /var/tmp entry in /etc/fstab
+      sed -i '/\/var\/tmp/ s/defaults/&'",nosuid"'/g' /etc/fstab
+      echo "nosuid options added to /var/tmp entry in /etc/fstab"
+      log_message "nosuid options added to /var/tmp entry in /etc/fstab"
+    if grep -qE "^\s*[^#].*\s+/var/tmp\s+.*noexec." /etc/fstab; then
+        echo "/var/tmp already configured with noexec options in /etc/fstab"
+   else
+      # Add nodevoptions to /var/tmp entry in /etc/fstab
+      sed -i '/\/var\/tmp/ s/defaults/&'",noexec"'/g' /etc/fstab
+      echo "noexec options added to /var/tmp entry in /etc/fstab"
+      log_message "noexec options added to /var/tmp entry in /etc/fstab"
+    fi
+else
+  log_message "/var/tmp entry not found in /etc/fstab"
+  echo "/var/tmp entry not found in /etc/fstab"
+fi
+log_step_status "Update" $?
