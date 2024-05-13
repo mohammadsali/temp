@@ -73,16 +73,17 @@ fi
 echo "Fstab for /home check complete. See $LOG_FILE for details."
 
 # Check if * hard core 0 is present in limits.conf
+log_message "****Ensure * hard core 0 is present in limits.conf  ****"
 if grep -qE "^\s*\*\s+hard\s+core\s+0\s*$" /etc/security/limits.conf; then
     log_message "'* hard core 0' is present in limits.conf"
     echo "'* hard core 0' is present in limits.conf"
 else
-    log_message "'* hard core 0' is not present in limits.conf. Adding it."
-    echo "'* hard core 0' is not present in limits.conf. Adding it."
+    log_message "Adding '* hard core 0' in limits.conf."
+    echo "Adding '* hard core 0' in limits.conf."
     echo "* hard core 0" >> /etc/security/limits.conf
     log_message "'* hard core 0' added to limits.conf"
 fi
-
+echo "limits.conf check complete. See $LOG_FILE for details."
 
 
 
