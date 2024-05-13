@@ -73,22 +73,52 @@ fi
 echo "Fstab for /home check complete. See $LOG_FILE for details."
 
 # Check if * hard core 0 is present in limits.conf
-log_message "****Ensure * hard core 0 is present in limits.conf  ****"
-if grep -qE "^\s*\*\s+hard\s+core\s+0\s*$" /etc/security/limits.conf; then
-    log_message "'* hard core 0' is present in limits.conf"
-    echo "'* hard core 0' is present in limits.conf"
-else
+log_message "****Ensure core dumps are restricted (* hard core 0 is present in limits.conf)  ****"
+if ! grep -qE "^\s*\*\s+hard\s+core\s+0\s*$" /etc/security/limits.conf; then
     log_message "Adding '* hard core 0' in limits.conf."
     echo "Adding '* hard core 0' in limits.conf."
     echo "* hard core 0" >> /etc/security/limits.conf
-    log_message "'* hard core 0' added to limits.conf"
+    log_step_status "'* hard core 0' added to limits.conf" $?
+    
+else
+    log_message "'* hard core 0' is present in limits.conf"
+    echo "'* hard core 0' is present in limits.conf"
 fi
 echo "limits.conf check complete. See $LOG_FILE for details."
 
 
+# Ensure the OH Warning Message is present in /etc/motd with formatting
+log_message "**** Command Line Warning Banners is present in /etc/motd with formatting ****"
+MESSAGE="
+***********************************************
+*                                             *
+*  Welcome to our system.                    *
+*  Please remember to follow security        *
+*  guidelines.                               *
+*                                             *
+***********************************************
+"
+
+# Check if the Warning Message is already present in /etc/motd
+if ! grep -qF "$MESSAGE" /etc/motd; then
+    log_message "Adding OH Warning Message to /etc/motd"
+    echo "$MESSAGE" | sudo tee -a /etc/motd >/dev/null
+    # Check if the Warning Message was added successfully
+    if grep -qF "$MESSAGE" /etc/motd; then
+        echo "OH Warning Message added to /etc/motd"
+        log_step_status "Adding OH Warning Message to /etc/motd" $?
+    else
+        echo "log_step_status "Adding OH Warning Message to /etc/motd Failed"
+        log_step_status "Adding OH Warning Message to /etc/motd" $?
+    fi
+else
+        echo "OH Warning Message is already present in /etc/motd"
+fi
+echo "OH Warning Message check complete. See $LOG_FILE for details."
 
 
-
+# Ensure ntp is configured
+log_message "**** Ensure ntp is configured ****"
 
 
 
