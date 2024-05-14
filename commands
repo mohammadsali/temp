@@ -1,11 +1,15 @@
 # MOTD file path
 motd_file="/etc/motd"
 
-# Check if the MOTD file exists
 if [ -f "$motd_file" ]; then
-    # Append the custom message to the MOTD file
-    echo -e "$custom_message" >> "$motd_file"
-    echo "Custom message added to MOTD."
+    # Check if the custom message is already in the MOTD
+    if ! grep -qF "$custom_message" "$motd_file"; then
+        # Append the custom message to the MOTD file
+        echo -e "$custom_message" >> "$motd_file"
+        echo "Custom message added to MOTD."
+    else
+        echo "Custom message already exists in MOTD."
+    fi
 else
     echo "Error: MOTD file not found at $motd_file"
 fi
