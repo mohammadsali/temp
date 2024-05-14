@@ -1,9 +1,25 @@
 #!/bin/bash
 
-# Basic Linux Hardening Script with Logging
+# -------------------------------------------------------------------
+# Desctription:		OH Linux Hardening Script with Logging
+# Author:		    Mohammad Salman Ali	
+# Version:		    1.0
+# Platform:		    GNU/Linux
+# OS Distrib:		RHEL
+# -------------------------------------------------------------------
+# Last Update:		2024-05-14	
+# Initial Draft:	2024-05-10
+# -------------------------------------------------------------------   
+
+# -------------------------------------------------------------------
+# VARIABLES - CHANGE AS NEEDED
+# -------------------------------------------------------------------
+valid_user="root"
+valid_uid="0"
+valid_os_platform="Linux"
 
 # Log file
-LOG_FILE="/var/log/hardening.log"
+LOG_FILE="/var/log/hardening-$(date +"%Y-%m-%d %T").log"
 
 # Function to log messages
 log_message() {
@@ -22,6 +38,57 @@ log_step_status() {
         log_message "Step '$step' failed with exit code $exit_code."
     fi
 }
+
+# Function to restart ntpd service and get its status
+restart_service() {
+    sudo systemctl restart $1
+    if systemctl is-active --quiet $1; then
+     #   echo "ntpd service restarted successfully"
+        log_message "$1 service restarted successfully"
+    else
+      #  echo "Failed to restart ntpd service"
+        log_message "Failed to restart $1 service"
+    fi
+}
+
+
+### Function to search for and replace or add parameters in a file
+search_and_replace_or_add() {
+    local file="$1"
+    local parameter="$2"
+    local value="$3"
+
+    # Check if parameter exists
+    if grep -qE "^\s*$parameter\s*=" "$file"; then
+        # Replace existing parameter
+        sudo sed -i "s/^\s*$parameter\s*=.*/$parameter = $value/" "$file"
+        log_message "$parameter set to $value in $file"
+    else
+        # Add parameter if not found
+        echo "$parameter = $value" | sudo tee -a "$file" >/dev/null
+        log_message "Added $parameter = $value to $file"
+    fi
+}
+
+
+# Function to update LogLevel in sshd_config
+update_ssh_parameter() {
+    local sshd_config="/etc/ssh/sshd_config"
+    local parameter="$1"
+    local pvalue="$2"
+
+    # Check if Parameter already set in sshd_config
+    if grep -qE "^$parameter\s+" "$sshd_config"; then
+        # Update existing Parameter value
+        sudo sed -i "s/^\($parameter\s*\).*$/\1$pvalue/" "$sshd_config"
+        log_step_status "Updated $parameter to $pvalue in $sshd_config" $?
+    else
+        # Add new LogLevel setting
+        echo "$parameter $pvalue" | sudo tee -a "$sshd_config" >/dev/null
+        log_step_status "Added $parameter $pvalue to $sshd_config"
+    fi
+}
+#-------------------------------------------------------------------------
 
 # Ensure nodev, nosuid, noexec options on /var/tmp
 log_message "****Ensure nodev, nosuid, noexec options on /var/tmp  ****"
@@ -73,7 +140,7 @@ else
 fi
 echo "Fstab for /home check complete. See $LOG_FILE for details."
 
-# Check if * hard core 0 is present in limits.conf
+# Ensure core dumps are restricted (* hard core 0 is present in limits.conf)
 log_message "****Ensure core dumps are restricted (* hard core 0 is present in limits.conf)  ****"
 if ! grep -qE "^\s*\*\s+hard\s+core\s+0\s*$" /etc/security/limits.conf; then
     log_message "Adding '* hard core 0' in limits.conf."
@@ -178,18 +245,6 @@ add_or_edit_options() {
     fi
 }
 
-# Function to restart ntpd service and get its status
-restart_service() {
-    sudo systemctl restart $1
-    if systemctl is-active --quiet $1; then
-     #   echo "ntpd service restarted successfully"
-        log_message "$1 service restarted successfully"
-    else
-      #  echo "Failed to restart ntpd service"
-        log_message "Failed to restart $1 service"
-    fi
-}
-
 # Check if ntpd configuration file exists
 if [ -f "$NTPD_CONF" ]; then
     #echo "ntpd configuration file exists"
@@ -205,34 +260,6 @@ else
     log_message "ntpd configuration file does not exist"
 fi
 
-# Ensure X Window System is not installed
-log_message "**** Ensure X Window System is not installed ****"
-# Remove X Windows System Packages
-yum -y remove xorg-x11* >> "$LOG_FILE" 2>&1
-log_step_status "Remove X Windows System Packages" $? 
-
-#Disable X-11 Forwarding
-SSH_CONFIG="/etc/ssh/sshd_config"
-log_message "Disable X-11 Forwarding"
-if grep -qE "^\s*X11Forwarding\s+" "$SSH_CONFIG"; then
-    if grep -qE "^\s*X11Forwarding\s+yes" "$SSH_CONFIG"; then
-        log_message "X11Forwarding is set to yes. Modifying sshd_config..."
-        # Modify sshd_config to set X11Forwarding to no
-        sudo sed -i 's/^\s*X11Forwarding\s*yes/X11Forwarding no/' "$SSH_CONFIG"
-        log_step_status "sshd_config updated: X11Forwarding set to no." $?
-        # Restart sshd service
-        restart_service sshd
-    else
-        log_message "X11Forwarding is already set to no in sshd_config."
-    fi
-else       
-    log_message " X11Forwarding no is missing in $SSH_CONFIG. Adding..."
-    echo "X11Forwarding no" | sudo tee -a "$SSH_CONFIG" >/dev/null
-    log_step_status "Added X11Forwarding no to sshd_config" $?
-    # Restart sshd service
-    restart_service sshd
-fi
-
 # Ensure NFS and RPC daemons are not enabled
 log_message "****Ensure NFS and RPC daemons are not enabled ****"
 # List of services to disable
@@ -245,23 +272,6 @@ for service in "${SERVICES[@]}"; do
 done
 
 
-### Function to search for and replace or add net parameters in sysctl.conf
-search_and_replace_or_add() {
-    local file="$1"
-    local parameter="$2"
-    local value="$3"
-
-    # Check if parameter exists
-    if grep -qE "^\s*$parameter\s*=" "$file"; then
-        # Replace existing parameter
-        sudo sed -i "s/^\s*$parameter\s*=.*/$parameter = $value/" "$file"
-        log_message "$parameter set to $value in $file"
-    else
-        # Add parameter if not found
-        echo "$parameter = $value" | sudo tee -a "$file" >/dev/null
-        log_message "Added $parameter = $value to $file"
-    fi
-}
 
 
 # Ensure net parameters are added in /etc/sysctl.conf 
@@ -305,116 +315,47 @@ for param_value in "${NET_PARAMETERS[@]}"; do
     log_step_status " sysctl -w $param_value" $?
 done
 
-#sysctl -w net.ipv4.ip_forward=0
-#sysctl -w net.ipv4.route.flush=1
-#sysctl -w net.ipv4.conf.all.send_redirects=0
-#sysctl -w net.ipv4.conf.default.send_redirects=0
-#    sysctl -w net.ipv4.conf.all.accept_redirects=0
-##    sysctl -w net.ipv4.conf.default.accept_redirects=0
-#    sysctl -w net.ipv4.conf.all.secure_redirects=0
-#    sysctl -w net.ipv4.conf.default.secure_redirects=0
 
 
+# Update Parameter in sshd_config
+update_ssh_parameter "Protocol" "2"
+update_ssh_parameter "LogLevel" "INFO"
+update_ssh_parameter "MaxAuthTries" "4"
+update_ssh_parameter "PermitRootLogin" "no"
+update_ssh_parameter "ClientAliveInterval" "600"
+update_ssh_parameter "ClientAliveCountMax" "0"
+
+# Ensure X Window System is not installed
+log_message "**** Ensure X Window System is not installed ****"
+# Remove X Windows System Packages
+yum -y remove xorg-x11* >> "$LOG_FILE" 2>&1
+log_step_status "Remove X Windows System Packages" $? 
+
+#Disable X-11 Forwarding
+update_ssh_parameter "X11Forwarding" "no"
 
 
+# Enforce Password creation requirements in /etc/security/pwquality.conf 
+log_message "Enforce Password creation requirements in /etc/security/pwquality.conf "
+# List of password parameters and their values
+PASS_Policy_Param=(
+    "minlen=9"
+	"dcredit=-1"
+	"ocredit=-1"
+)
 
+# Search and replace or add each parameter in /etc/security/pwquality.conf
+for param_value in "${PASS_Policy_Param[@]}"; do
+    IFS='=' read -r parameter value <<< "$param_value"
+    search_and_replace_or_add "/etc/security/pwquality.conf" "$parameter" "$value"
+    log_step_status " search_and_replace_or_add net parameter $parameter in /etc/security/pwquality.conf" $?
+done
 
+# Ensure Default umask is 027
+log_message "**** Update or Add default umask in /etc/bashrc ****" 
+search_and_replace_or_add "/etc/bashrc" "umask" "027"
 
+log_message "**** Update or Add default umask in /etc/profile ****" 
+search_and_replace_or_add "/etc/profile" "umask" "027"
 
-
-
-# Ensure nodev option on /home
-log_message "****Ensure nodev option on /home  ****"
-if [ -e "/etc/fstab" ]; then
-    if grep -qE "^\s*[^#].*\s+/home\s+" /etc/fstab; then
-        # Add nodev option if not already set
-        if ! grep -qE "^\s*[^#].*\s+/home\s+.*nodev" /etc/fstab; then
-            sed -i '/\/home/ s/defaults/&',nodev'/g' /etc/fstab
-            log_step_status "Adding nodev option to /home in /etc/fstab" $?
-        else
-            log_message "/home already configured with nodev option in /etc/fstab"
-        fi
-    else
-        log_message "/home entry not found in /etc/fstab"
-    fi
-else
-    log_message "/home not found"
-fi
-echo "Fstab for /home check complete. See $LOG_FILE for details."
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-************************************************************************************************
-
-# Update package repositories and installed packages
-log_message "Updating package repositories and installed packages..."
-sudo apt update && sudo apt upgrade -y
-log_step_status "Update" $?
-
-# Enable firewall (UFW) and allow necessary ports
-log_message "Configuring firewall (UFW)..."
-sudo apt install ufw -y
-sudo ufw allow OpenSSH  # Allow SSH access
-sudo ufw enable
-log_step_status "Firewall" $?
-
-# Disable root login via SSH
-log_message "Disabling root login via SSH..."
-sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
-sudo service ssh restart
-log_step_status "Root Login" $?
-
-# Disable password authentication and use SSH keys only
-log_message "Disabling password authentication and requiring SSH keys only..."
-sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-sudo service ssh restart
-log_step_status "Password Auth" $?
-
-# Set up automatic security updates
-log_message "Setting up automatic security updates..."
-sudo apt install unattended-upgrades -y
-sudo dpkg-reconfigure --priority=low unattended-upgrades
-log_step_status "Auto Updates" $?
-
-# Install and configure fail2ban for intrusion prevention
-log_message "Installing fail2ban for intrusion prevention..."
-sudo apt install fail2ban -y
-sudo cp /etc/fail2ban/jail.{conf,local}
-sudo systemctl restart fail2ban
-log_step_status "Fail2Ban" $?
-
-# Limit user access
-log_message "Limiting user access..."
-# Example: Create a new user and disable root login
-# sudo adduser newuser
-# sudo usermod -aG sudo newuser
-# sudo passwd -l root
-log_step_status "User Access" $?
-
-# Configure syslog to forward logs to a centralized server (optional)
-# log_message "Configuring syslog to forward logs to a centralized server..."
-# Edit /etc/rsyslog.conf to include appropriate configuration for forwarding logs
-# log_step_status "Syslog" $?
-
-echo "Basic system hardening complete. See $LOG_FILE for details."
+echo "OH system hardening complete. See $LOG_FILE for details."
