@@ -1,13 +1,13 @@
 import boto3
 
 # 🔹 Ask user for the search string
-search_string = input("Enter the search string: ").strip()
+search_string = input("Enter the search string: ").strip().lower()  # Convert input to lowercase
 
 # ✅ Search S3 Buckets
 def search_s3():
     s3 = boto3.client("s3")
     buckets = s3.list_buckets()["Buckets"]
-    return [f"arn:aws:s3:::{b['Name']}" for b in buckets if search_string in b["Name"]]
+    return [f"arn:aws:s3:::{b['Name']}" for b in buckets if search_string in b["Name"].lower()]
 
 # ✅ Search CloudFront Distributions (by Domain Name, ID, and CNAME)
 def search_cloudfront():
@@ -17,9 +17,9 @@ def search_cloudfront():
 
     if "DistributionList" in distributions and "Items" in distributions["DistributionList"]:
         for dist in distributions["DistributionList"]["Items"]:
-            domain_match = search_string in dist["DomainName"]
-            id_match = search_string in dist["Id"]
-            cname_match = any(search_string in cname for cname in dist.get("Aliases", {}).get("Items", []))
+            domain_match = search_string in dist["DomainName"].lower()
+            id_match = search_string in dist["Id"].lower()
+            cname_match = any(search_string in cname.lower() for cname in dist.get("Aliases", {}).get("Items", []))
 
             if domain_match or id_match or cname_match:
                 matching_distributions.append({
@@ -35,7 +35,7 @@ def search_cloudfront():
 def search_lambda():
     lambda_client = boto3.client("lambda")
     functions = lambda_client.list_functions()["Functions"]
-    return [f["FunctionArn"] for f in functions if search_string in f["FunctionName"]]
+    return [f["FunctionArn"] for f in functions if search_string in f["FunctionName"].lower()]
 
 # ✅ Search EC2 Instances (by Name Tag)
 def search_ec2():
@@ -46,7 +46,7 @@ def search_ec2():
     for reservation in instances:
         for instance in reservation["Instances"]:
             for tag in instance.get("Tags", []):
-                if tag["Key"] == "Name" and search_string in tag["Value"]:
+                if tag["Key"] == "Name" and search_string in tag["Value"].lower():
                     matching_instances.append(f"arn:aws:ec2:{boto3.session.Session().region_name}:{boto3.client('sts').get_caller_identity()['Account']}:instance/{instance['InstanceId']}")
 
     return matching_instances
@@ -55,25 +55,25 @@ def search_ec2():
 def search_rds():
     rds = boto3.client("rds")
     instances = rds.describe_db_instances()["DBInstances"]
-    return [db["DBInstanceArn"] for db in instances if search_string in db["DBInstanceIdentifier"]]
+    return [db["DBInstanceArn"] for db in instances if search_string in db["DBInstanceIdentifier"].lower()]
 
 # ✅ Search DynamoDB Tables (by Table Name)
 def search_dynamodb():
     dynamodb = boto3.client("dynamodb")
     tables = dynamodb.list_tables()["TableNames"]
-    return [f"arn:aws:dynamodb:{boto3.session.Session().region_name}:{boto3.client('sts').get_caller_identity()['Account']}:table/{table}" for table in tables if search_string in table]
+    return [f"arn:aws:dynamodb:{boto3.session.Session().region_name}:{boto3.client('sts').get_caller_identity()['Account']}:table/{table}" for table in tables if search_string in table.lower()]
 
 # ✅ Search IAM Roles (by Role Name)
 def search_iam_roles():
     iam = boto3.client("iam")
     roles = iam.list_roles()["Roles"]
-    return [role["Arn"] for role in roles if search_string in role["RoleName"]]
+    return [role["Arn"] for role in roles if search_string in role["RoleName"].lower()]
 
 # ✅ Search CloudFormation Stacks (by Stack Name)
 def search_cloudformation():
     cf = boto3.client("cloudformation")
     stacks = cf.list_stacks(StackStatusFilter=["CREATE_COMPLETE", "UPDATE_COMPLETE"])["StackSummaries"]
-    return [stack["StackId"] for stack in stacks if search_string in stack["StackName"]]
+    return [stack["StackId"] for stack in stacks if search_string in stack["StackName"].lower()]
 
 # 🔹 Run searches and print results
 if __name__ == "__main__":
