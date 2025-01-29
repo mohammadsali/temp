@@ -10,7 +10,7 @@ def search_s3():
     matching_buckets = [f"arn:aws:s3:::{b['Name']}" for b in buckets if search_string in b["Name"]]
     return matching_buckets
 
-# ✅ Search CloudFront Distributions
+# ✅ Search CloudFront Distributions (by Domain Name, ID, and CNAME)
 def search_cloudfront():
     cloudfront = boto3.client("cloudfront")
     distributions = cloudfront.list_distributions()
@@ -18,8 +18,23 @@ def search_cloudfront():
 
     if "DistributionList" in distributions and "Items" in distributions["DistributionList"]:
         for dist in distributions["DistributionList"]["Items"]:
-            if search_string in dist["DomainName"] or search_string in dist["Id"]:
-                matching_distributions.append(dist["ARN"])
+            domain_match = search_string in dist["DomainName"]
+            id_match = search_string in dist["Id"]
+            cname_match = False
+
+            if "Aliases" in dist and "Items" in dist["Aliases"]:
+                for cname in dist["Aliases"]["Items"]:
+                    if search_string in cname:
+                        cname_match = True
+                        break  # Stop checking if a match is found
+
+            if domain_match or id_match or cname_match:
+                matching_distributions.append({
+                    "ARN": dist["ARN"],
+                    "ID": dist["Id"],
+                    "Domain": dist["DomainName"],
+                    "CNAMEs": dist["Aliases"]["Items"] if "Aliases" in dist else []
+                })
 
     return matching_distributions
 
@@ -42,7 +57,14 @@ if __name__ == "__main__":
     print("\n".join(s3_results) if s3_results else "No matches found.")
 
     print("\n🌍 Matching CloudFront Distributions:")
-    print("\n".join(cloudfront_results) if cloudfront_results else "No matches found.")
+    if cloudfront_results:
+        for result in cloudfront_results:
+            print(f"🔹 ARN: {result['ARN']}\n   ID: {result['ID']}\n   Domain: {result['Domain']}")
+            if result["CNAMEs"]:
+                print(f"   CNAMEs: {', '.join(result['CNAMEs'])}")
+            print()
+    else:
+        print("No matches found.")
 
     print("\n⚡ Matching Lambda Functions:")
     print("\n".join(lambda_results) if lambda_results else "No matches found.")
