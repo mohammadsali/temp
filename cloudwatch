@@ -1,0 +1,5 @@
+fields @timestamp, @message
+| parse @message '"statusCode": *' as statusCode
+| filter statusCode != "200" and statusCode like /^[0-9]+$/
+| sort @timestamp desc
+| limit 50
