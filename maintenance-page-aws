@@ -1,0 +1,75 @@
+To display a **maintenance page** using **AWS CloudFront**, the best approach depends on whether you want a **temporary (manual) setup** or an **automated solution**. Here are the **recommended methods**:  
+
+---
+
+## **Method 1: Use a Custom S3 Origin (Recommended for Static Maintenance Page)**  
+This is the **simplest and most efficient approach**. You configure CloudFront to serve a static maintenance page from an S3 bucket instead of your actual origin (e.g., an S3 website, an ALB, or an EC2 instance).  
+
+### **Steps:**  
+1. **Create an S3 Bucket** (e.g., `maintenance-page-bucket`)  
+2. **Upload an `index.html` File** (your maintenance page)  
+3. **Modify CloudFront Behavior** to Route All Requests to the Maintenance Page:  
+   - Go to the **CloudFront console** → Select your distribution.  
+   - Under the **Behaviors tab**, create a new behavior with:  
+     - **Path Pattern:** `/*` (to apply to all requests)  
+     - **Origin:** Select the new S3 bucket.  
+   - Save and deploy (takes ~10-15 min).  
+
+4. **(Optional) Serve Different Pages Based on Headers**  
+   - You can create a special behavior in CloudFront that **only routes specific users** (e.g., admin users) to the real site.  
+
+✅ **Pros:**  
+- No impact on the backend.
+- Fast to deploy and revert.  
+- No extra cost beyond S3 and CloudFront.  
+
+---
+
+## **Method 2: Use Lambda@Edge for Custom Responses**  
+If you need a **dynamic maintenance mode** (e.g., enabling/disabling via API), you can use **Lambda@Edge** to return a custom response.  
+
+### **Steps:**  
+1. Create an AWS Lambda function in **us-east-1** (for CloudFront).  
+2. Use the following code to return a 503 maintenance page:  
+
+```python
+def lambda_handler(event, context):
+    return {
+        'statusCode': 503,
+        'statusDescription': 'Service Unavailable',
+        'headers': {
+            'Content-Type': [{'key': 'Content-Type', 'value': 'text/html'}],
+        },
+        'body': '<html><body><h1>Maintenance Mode</h1><p>We are currently undergoing maintenance. Please check back later.</p></body></html>',
+    }
+```
+
+3. Attach this Lambda function to CloudFront as an **Origin Request or Viewer Request** trigger.  
+
+✅ **Pros:**  
+- No need to change origins.  
+- Customizable logic (e.g., allowlisted users can bypass).  
+
+---
+
+## **Method 3: Use CloudFront Custom Error Pages**  
+If your backend **returns a 503 error** during maintenance, you can configure CloudFront to **show a custom maintenance page instead**.  
+
+### **Steps:**  
+1. Upload a maintenance page to S3 (`/maintenance.html`).  
+2. In **CloudFront → Error Pages**, add a rule for **HTTP 503** and redirect it to `/maintenance.html`.  
+
+✅ **Pros:**  
+- No origin change required.  
+- Works automatically if your backend returns a 503.  
+
+---
+
+## **Which Method Should You Choose?**  
+| Use Case | Recommended Method |
+|----------|-------------------|
+| **Simple Static Page** | **Method 1 (S3 Origin)** |
+| **Dynamically Enable/Disable** | **Method 2 (Lambda@Edge)** |
+| **Backend Already Returns 503** | **Method 3 (Custom Error Pages)** |
+
+Let me know if you need further details! 🚀
