@@ -1,0 +1,266 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  one-cms-service
+
+Globals:
+  Function:
+    Timeout: !Ref TimeOut
+    MemorySize: !Ref MemorySize
+    Runtime: nodejs18.x
+    CodeUri: ./
+    Environment:
+      Variables:
+        CORS_DOMAINS_ALLOWED: !Ref CorsDomainsAllowed
+        REDIS_CLUSTER_ENDPOINT: { 'Fn::GetAtt': ['RedisReplicationGroup', 'PrimaryEndPoint.Address'] }
+        REDIS_CLUSTER_PORT: { 'Fn::GetAtt': ['RedisReplicationGroup', 'PrimaryEndPoint.Port'] }
+        SECRET_MANAGER_NAME_USERPASS: !Ref RedisCacheSecret
+        DEBUG: !Ref Debug
+        HOME_ACCESS: '@Dm1N0Nly'
+    Architectures:
+      - x86_64
+    VpcConfig:
+      SecurityGroupIds:
+        - !Ref lambdaSecGroup
+      SubnetIds:
+        - { "Fn::ImportValue": { "Fn::Sub": "${networkStack}-PrimaryPrivate" } }
+        - { "Fn::ImportValue": { "Fn::Sub": "${networkStack}-BackupPrivate" } }
+
+Parameters:
+  StageName:
+    Type: String
+    Default: dev
+  ProjectName:
+    Type: String
+    Default: dev-cms-service
+  networkStack:
+    Type: String
+    Default: DevEnvVPC
+  Host:
+    Type: String
+    Default: onecms1
+  Domain:
+    Type: String
+    Default: awsdevotn.ca
+  AuthServiceStackName:
+    Type: String
+    Default: dev-auth-service
+  CorsDomainsAllowed:
+    Type: String
+    Default: localhost,awsdevotn.ca,cloud.vrest.io
+  VpceID:
+    Type: String
+    Default: vpce-04086706476d1580c
+  Debug:
+    Type: String
+    Default: true
+  TimeOut:
+    Type: String
+    Default: 10
+  MemorySize:
+    Type: String
+    Default: 512
+  CacheNodeType:
+    Type: String
+    Default: cache.t3.micro
+
+Metadata:
+  BuildMetadata: &function-metadata
+    BuildMethod: esbuild
+    BuildProperties:
+      Minify: true
+      Target: "es2020"
+      Sourcemap: true
+      EntryPoints:
+        - app.ts
+  Policies: &function-policies
+    - Statement:
+      - Sid: SecretManagerPolicy
+        Effect: Allow
+        Action:
+        - 'secretsmanager:GetSecretValue'
+        Resource:
+          - !Ref RedisCacheSecret
+
+Resources:
+  # ALB Setup
+  ALB:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: !Ref ProjectName
+      Subnets:
+        - { "Fn::ImportValue": { "Fn::Sub": "${networkStack}-PrimaryPrivate" } }
+        - { "Fn::ImportValue": { "Fn::Sub": "${networkStack}-BackupPrivate" } }
+      SecurityGroups:
+        - !Ref lambdaSecGroup
+      Scheme: internal
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+      Type: application
+
+  ALBListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            StatusCode: 200
+            MessageBody: 'OK'
+            ContentType: 'text/plain'
+      LoadBalancerArn: !Ref ALB
+      Port: '80'
+      Protocol: HTTP
+
+  # Lambda function setup with ALB as event source
+  HomeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.homeHandler
+      Events:
+        Home:
+          Type: ALB
+          Properties:
+            ListenerArn: !Ref ALBListener
+            Path: /
+            Method: GET
+      Policies:
+        <<: *function-policies
+      Tags:
+        Application: CCMS
+    Metadata:
+      <<: *function-metadata
+
+  CreateHubtopicFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.createHubTopicHandler
+      Events:
+        CreateHubTopic:
+          Type: ALB
+          Properties:
+            ListenerArn: !Ref ALBListener
+            Path: /createHubTopic
+            Method: POST
+      Policies:
+        <<: *function-policies
+      Tags:
+        Application: CCMS
+    Metadata:
+      <<: *function-metadata
+
+  HubtopicFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.hubtopicHandler
+      Events:
+        Hubtopic:
+          Type: ALB
+          Properties:
+            ListenerArn: !Ref ALBListener
+            Path: /hub/{hubTopic}
+            Method: GET
+      Policies:
+        <<: *function-policies
+      Tags:
+        Application: CCMS
+    Metadata:
+      <<: *function-metadata
+
+  patientOpenCloseFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.patientOpenCloseHandler
+      Events:
+        PatientOpenClose:
+          Type: ALB
+          Properties:
+            ListenerArn: !Ref ALBListener
+            Path: /hub
+            Method: POST
+      Policies:
+        <<: *function-policies
+      Tags:
+        Application: CCMS
+    Metadata:
+      <<: *function-metadata
+
+  PatientHubtopicFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.patientHubtopicHandler
+      Events:
+        PatientHubtopic:
+          Type: ALB
+          Properties:
+            ListenerArn: !Ref ALBListener
+            Path: /Patient/{id}
+            Method: GET
+      Policies:
+        <<: *function-policies
+      Tags:
+         Application: CCMS
+    Metadata:
+      <<: *function-metadata
+
+  lambdaSecGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: The lambda security group
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          FromPort: '0'
+          ToPort: '65535'
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: 'tcp'
+          FromPort: '6379'
+          ToPort: '6379'
+          CidrIp: '10.0.0.0/8'
+      VpcId: {"Fn::ImportValue": { "Fn::Sub": "${networkStack}-TheVPC"}}
+
+  RedisReplicationGroup:
+    Type: 'AWS::ElastiCache::ReplicationGroup'
+    Properties:
+      ReplicationGroupDescription: CMS elasticache
+      NumCacheClusters: '1'
+      Engine: redis
+      CacheNodeType: !Ref CacheNodeType
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: true
+      AuthToken: {"Fn::Sub": "{{resolve:secretsmanager:${RedisCacheSecret}::password}}"}
+
+  ElastiCacheSubnetGroup:
+    Type: 'AWS::ElastiCache::SubnetGroup'
+    Properties:
+      Description: Cache Subnet Group
+      SubnetIds:
+        - { "Fn::ImportValue": {"Fn::Sub": "${networkStack}-PrimaryPrivate"}}
+        - { "Fn::ImportValue": {"Fn::Sub": "${networkStack}-BackupPrivate"}}
+
+  RedisCacheSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: {"Fn::Sub": "/secrets/oh/${AWS::StackName}/authcache"}
+      Description: "Secret used by patient summary lambda"
+      GenerateSecretString:
+        SecretStringTemplate: "{\"username\":\"cacheadmin\"}"
+        GenerateStringKey: "password"
+        PasswordLength: 20
+        ExcludePunctuation: true
+
+Outputs:
+  RedisEndpoint:
+    Description: The DNSName of redis cluster
+    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Address
+    Export:
+      Name: !Join ["-", [!Ref ProjectName, "RedisEndPoint"]]
+  RedisSecret:
+    Description: The secret of redis cluster
+    Value: !Ref RedisCacheSecret
+    Export:
+      Name: !Join ["-", [!Ref ProjectName, "RedisSecret"]]
+  RedisSecurityGroup:
+    Description: The security group of redis cluster
+    Value: !Ref ElastiCacheSecGroup
+    Export:
+      Name: !Join ["-", [!Ref ProjectName, "RedisSecurityGroup"]]
